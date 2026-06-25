@@ -1,0 +1,63 @@
+name: Build macOS app
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-15
+            arch_name: apple-silicon
+            ffmpeg_arch: arm64
+          - runner: macos-15-intel
+            arch_name: intel
+            ffmpeg_arch: amd64
+
+    runs-on: ${{ matrix.runner }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.10
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+
+      - name: Install PyInstaller
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install pyinstaller
+
+      - name: Download ffmpeg and ffprobe
+        run: |
+          curl -L -o ffmpeg.zip "https://ffmpeg.martin-riedl.de/redirect/latest/macos/${{ matrix.ffmpeg_arch }}/snapshot/ffmpeg.zip"
+          curl -L -o ffprobe.zip "https://ffmpeg.martin-riedl.de/redirect/latest/macos/${{ matrix.ffmpeg_arch }}/snapshot/ffprobe.zip"
+
+          unzip -o ffmpeg.zip
+          unzip -o ffprobe.zip
+
+          chmod +x ffmpeg
+          chmod +x ffprobe
+
+          ./ffmpeg -version
+          ./ffprobe -version
+
+      - name: Build app
+        run: |
+          chmod +x build_macos_app.sh
+          ./build_macos_app.sh
+
+      - name: Zip app
+        run: |
+          cd dist
+          ditto -c -k --sequesterRsrc --keepParent "Audio Splitter.app" "Audio Splitter-${{ matrix.arch_name }}.zip"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Audio-Splitter-macOS-${{ matrix.arch_name }}
+          path: dist/Audio Splitter-${{ matrix.arch_name }}.zip
